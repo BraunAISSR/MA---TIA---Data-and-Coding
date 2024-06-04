@@ -1,0 +1,148 @@
+#This R-file contains the coding for the ordinal logisitc regression preformed
+#for the Master Thesis "Transnational informational autocrats: the silent 
+#transformation of authoritarian political control." 
+
+  #The concise file contains the pre-processing, transformation of data used
+  #for the model-fitting of the thesis. 
+
+  #The data stems from the self-coded TAI-Index dataset (Braun 2024), the Digital
+  #Societies Project-Survey (Mechkova et al. 2023), The Episodes of Regime Transitions-
+  #dataset (Maerz et al. 2023), the Mass Mobilization Project (Clark & Regan 2021),
+  #the KOF-Globalisation-Index (Gygli et al. 2019) and the development indicators of the World Bank.
+
+  #Variables in logistic regression:
+  #Dependent variable:
+    #TAI-Index (Ordinal scaled). (Braun 2024).
+
+  #Main independant variables:
+    #Tert_edu: "SE.TER.ENRR: School enrollment, tertiary (% gross)". World Bank development indicators (https://data.worldbank.org/indicator/SE.TER.ENRR?view=chart).
+    #KOFInGi: "Informational Globalisation". KOF-Globalisation-Index (Gygli et al. 2019).
+    #prn_avg: Mean value of average protest frequency per year per country. Calculated from protest event data from the Mass Mobilization Project (Clark & Regan 2021).
+
+  #Control Variables:
+    #rempctGDP_in: "BX.TRF.PWKR.CD.DT: Personal remittances, received (current US$)". World Bank development indicators (https://data.worldbank.org/indicator/BX.TRF.PWKR.CD.DT?view=chart).
+    #v2x_polyarchy: "v2x_polyarchy". Episodes of Regime Transitions Dataset (Maerz et al. 2023).
+    #NY.GDP.PCAP.KD: "NY.GDP.PCAP.KD: GDP per capita (constant 2015 US$)". World Bank development indicators (https://data.worldbank.org/indicator/NY.GDP.PCAP.KD).
+    #TradepctGDP: "NE.TRD.GNFS.ZS: Trade (% of GDP)". World Bank development indicators (https://data.worldbank.org/indicator/NE.TRD.GNFS.ZS?name_desc=true).
+    #BX.KLT.DINV.WD.GD.ZS: "BX.KLT.DINV.WD.GD.ZS: Foreign direct investment, net inflows (% of GDP)". World Bank development indicators (https://data.worldbank.org/indicator/BX.KLT.DINV.WD.GD.ZS).
+
+library(plotrix)
+library(brant)
+library(logistf)
+library(car)
+library(MASS)
+library(dplyr)
+library(broom)
+
+    #Import of datasets including data processing
+    #Ejecting unused data and aligning country names
+
+#Import and processing
+ds_authcon <- subset(ds_AuthCon, year >= 2022)                                  #World Bank development indicators
+ds_authcon <- ds_authcon %>%                                                    #Aligning country names for merging data later
+  select(country, year, NY.GDP.MKTP.KD, NY.GDP.PCAP.KD, BX.KLT.DINV.WD.GD.ZS)
+ds_authcon$country[ds_authcon$country == "Russian Federation"]<- "Russia"
+ds_authcon$country[ds_authcon$country == "Egypt, Arab Rep."]<- "Egypt"
+ds_authcon$country[ds_authcon$country == "Turkiye"]<- "Türkiye"
+ds_authcon <- ds_authcon[, !names(ds_authcon) == "countryyear"]
+dfERT <- subset(episodes, year >= 2023)                                         #Episodes of Regime Transition data
+dfPR <- file26013811bbf                                                         #Mass Mobilization Project data
+dfPR <- dfPR %>%
+  select(country, year, prn_avg) %>% 
+  filter(year == 2019)
+
+#Merging all individual datasources in one dataframe
+merged_df <- merge(dfTIA_fil_year, ds_authcon, by.x = "country_name", by.y = "country", all.x = TRUE)
+merged_df <- merged_df[, !(names(merged_df) %in% c("year.x", "country_id", "year", "year.y", "countrycode"))]
+merged_df <- merge(merged_df, dfPR, by.x = "country_name", by.y = "country", all.x =  TRUE)
+
+
+    #More data processing before the model fitting
+    #
+    #
+
+#Transforming individual varibles by factorialisation or inversion
+merged_df$TIA_addindex <- factor(merged_df$TIA_addindex)
+merged_df$TIND_addindex <- factor(merged_df$TIND_addindex)
+merged_df$TINF_addindex <- factor(merged_df$TINF_addindex)
+merged_df$KOFInGI <- max(merged_df$KOFInGI, na.rm = TRUE) - merged_df$KOFInGI
+
+#Ejecting democracies from merged dataframe (preliminary explorations were performed
+#with no restrictions of regime type. Performing analysis only on autocracies 
+#is, however, more potent for the argument at hand)
+str(merged_df)
+sum(is.na(merged_df))
+merged_df <- merged_df[merged_df$v2x_regime %in% c(0, 1), ]                     #Eject democracies by V-Dem Regime type
+
+#converting strings to numerics
+cols_to_convert <- c("NY.GDP.PCAP.KD","NY.GDP.MKTP.KD", "BX.KLT.DINV.WD.GD.ZS", "prn_avg")
+for (col in cols_to_convert) {
+  merged_df[[col]] <- as.numeric(as.character(merged_df[[col]]))
+}
+
+#removing missings
+merged_df <- merged_df[!is.na(merged_df$TertEdu), ]
+merged_df <- merged_df[!is.na(merged_df$BX.KLT.DINV.WD.GD.ZS), ]
+merged_df <- merged_df[!is.na(merged_df$KOFGI), ]
+merged_df <- merged_df[!is.na(merged_df$prn_avg), ]
+
+
+    #Z-score-normalization Operation
+    #Nnormalize differences in scaling of the variables
+    #Necessary to prevent scaling issues in computing and to meet the assumption of proportional odds
+
+#Function for Normalizing (x-(mean of variable))/standard deviation
+z_score_normalization <- function(df, columns) {
+  for (col in columns) {
+    mean_col <- mean(df[[col]], na.rm = TRUE)
+    sd_col <- sd(df[[col]], na.rm = TRUE)
+    df[[col]] <- ((df[[col]] - mean_col) / sd_col)
+  }
+  return(df)
+}
+
+cols_to_norm <- c("TertEdu", "KOFGI", "KOFInGI", "TradepctGDP", "rempctGDP_in", "v2x_polyarchy", "NY.GDP.PCAP.KD","NY.GDP.MKTP.KD", "BX.KLT.DINV.WD.GD.ZS", "prn_avg")
+normalized_df <- z_score_normalization(merged_df, cols_to_norm)
+
+    #Model fitting and performance of Ordinal logistic regression
+    #Both a model and intercept  model are fitted for later tests
+    #Testing of model parameters before results
+
+#OLR-Model
+model <- polr(TIA_addindex ~ TertEdu + KOFInGI + prn_avg + rempctGDP_in + v2x_polyarchy + NY.GDP.PCAP.KD +  TradepctGDP + BX.KLT.DINV.WD.GD.ZS,
+              data = normalized_df, method = "logistic")
+
+#Intercept-Model
+model_intercept <- polr(TIA_addindex ~ 1, data = normalized_df, method = "logistic")
+
+
+# Extract coefficients and calculate odds ratios
+odds_ratios <- exp(coef(model))
+
+#Calculate confidence intervals for the coefficients
+CI <- confint(model)
+lower_CI <- exp(CI[, 1])
+upper_CI <- exp(CI[, 2])
+
+#Odds ratios and confidence intervals into a data frame
+results <- data.frame(
+  Term = names(odds_ratios),
+  Odds_Ratio = odds_ratios,
+  Lower_CI = lower_CI,
+  Upper_CI = upper_CI
+)
+
+#Check for proportional odds assumption with Brant-test
+model_brant_test <- brant(model)
+print(model_brant_test)
+
+#Variance Inflation Factor testing
+vif(model)
+
+#OLR
+summary(model)
+summary(model_intercept)
+print(results)
+
+#Chi-test for model-difference
+anova(model,model_intercept)
