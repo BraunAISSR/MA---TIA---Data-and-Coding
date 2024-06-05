@@ -2,7 +2,9 @@
 #for the Master Thesis "Transnational informational autocrats: the silent 
 #transformation of authoritarian political control." 
 
-  #The concise file contains the pre-processing, transformation of data used
+#The artificial intelligence assistant "ChatGPT" was used to write this code.
+
+  #The file contains the pre-processing, transformation of data used
   #for the model-fitting of the thesis. 
 
   #The data stems from the self-coded TAI-Index dataset (Braun 2024), the Digital
