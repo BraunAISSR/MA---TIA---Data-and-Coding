@@ -7,7 +7,7 @@
   #The file contains the pre-processing, transformation of data used
   #for the model-fitting of the thesis. 
 
-  #The data stems from the self-coded TAI-Index dataset (Braun 2024), the Digital
+  #Data sources: Self-coded TAI-Index dataset (Braun 2024), the Digital
   #Societies Project-Survey (Mechkova et al. 2023), The Episodes of Regime Transitions-
   #dataset (Maerz et al. 2023), the Mass Mobilization Project (Clark & Regan 2021),
   #the KOF-Globalisation-Index (Gygli et al. 2019) and the development indicators of the World Bank.
