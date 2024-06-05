@@ -1,0 +1,395 @@
+#This R-file contains the coding for visualisations in section IV.(1)
+#for the Master Thesis "Transnational informational autocrats: the silent 
+#transformation of authoritarian political control." 
+
+#The code is split to two different files as the computing of the protest event
+#data from the "Mass Mobilization Project" for section IV.(1) need extra computing power.
+#The coding for sections IV.(2) can be found in the file "".
+#The code for this file was, hence, run in the "Posit Cloud" Web application". 
+
+#The artificial intelligence assistant "ChatGPT" was used to write this code.
+
+    #Data sources: the Barro-Lee Educational Attainment data set (Barro & Lee 2013),
+    #the Episodes of Regime Transitions-data set (Maerz et al. 2023), the Cline Center
+    #Coups d'Ètat Project (Chin et al. 2021), the Mass Mobilization Project (Clark & Regan 2021),
+    #the KOF-Globalisation-Index (Gygli et al. 2019) and the development indicators of the World Bank.
+
+    #Variable explanations for this code can be found next to the code for the respective
+    #Figures.
+
+library("ggplot2")
+library("dplyr")
+library("broom")
+library("patchwork")
+library("gridExtra")
+library("openxlsx")
+
+
+    #Import data sets including data processing.
+
+dfEP  <- episodes                                                               #Episodes of Regime-Transition data set
+dfPR  <- x                                                                      #The Mass Mobilization Project data set
+dfCO  <- Coup_data_2_1_3                                                        #Cline Center Coups d'État data set
+dfED  <- BL_v3_MF1564_COR                                                       #Barro-Lee Educational Attainment data set
+dfGLO  <- KOFGI_2023_public                                                     #KOF-Globalisation-Index
+
+      #Pre-processing of data
+      #Including aligning of country names, eject missings, merging data sets
+      #All data sets have slight variation regarding country names. Barro-Lee use
+      #the official UN-designation, whilst V-Dem or the "Mass Mobilization project"
+      #does not. Consistent country names are necessary to ensure correct and complete,
+      #merging of the individual data sets.
+
+
+#Align country names of Barro and Lee with Episodes of Regimes Transition
+unique_countries <- unique(dfEP$country_name)
+cntry_ED <- unique(dfED$Country)
+unique_countries <- setdiff(unique_countries, cntry_ED)
+print(unique_countries)
+dfED$Country[dfED$Country == "USA"] <- "United States of America"
+dfED$Country[dfED$Country == "Myanmar"] <- "Burma/Myanmar"
+dfED$Country[dfED$Country == "Turkey"]<- "Türkiye"
+
+#Iterate through Barro-Lee data and replace rows of dfED&country that do not match list,
+#with correct country name from Episodes of Regime Transition data set
+for (country in unique_countries) {
+  match_rows <- grep(paste0("^", substr(country, 1, 4)), dfED$Country)
+  
+  if (length(match_rows) > 0) {                                                 # If country name in list and in data match, replace
+    dfED$Country[match_rows] <- country                                         # Replace the matched countries in dfED$country
+  }
+}
+
+#Merge Barro-Lee and Episodes of Regime transition data in dfEDEP
+dfEDEP <- merge(dfED, dfEP[, c("country_name", "year", "v2x_regime")], 
+               by.x = c("Country", "Year"), by.y = c("country_name", "year"), all.x = TRUE)
+
+
+#Repeat aligning procedure for Mass Mobilisation Project data
+unique_countries <- unique(dfEP$country_name)
+cntry_PR <- unique(dfPR$country)
+unique_countries <- setdiff(unique_countries, cntry_PR)
+print(unique_countries)
+
+dfPR$country[dfPR$country == "United States"] <- "United States of America"
+dfPR$country[dfPR$country == "Myanmar"] <- "Burma/Myanmar"
+dfPR$country[dfPR$country == "Turkey"]<- "Türkiye"
+
+for (country in unique_countries) {
+  match_rows <- grep(paste0("^", substr(country, 1, 3)), dfPR$country)
+
+  if (length(match_rows) > 0) {                                                 # If country name in list and in data match, replace
+    dfPR$country[match_rows] <- country                                         # Replace the matched countries in dfED$country
+  }
+}
+
+#Merge Mass Mobilisation Project and Episodes of Regime Transition data in dfEPR
+dfEPR <- merge(dfPR, dfEP[, c("country_name", "year", "v2x_regime")], 
+                   by.x = c("country", "year"), by.y = c("country_name", "year"), all.x = TRUE)
+
+#Eject data that is not in determined period of observation
+dfEPR <- dfEPR[dfEPR$year >=  1991, ]
+dfEPR <- dfEPR[dfEPR$year <=  2019, ]
+#eject unused columns
+dfEPR <- dfEPR[, !names(dfEPR) %in% c("protesteridentity", "protesterdemand1","protesterdemand2", "protesterdemand3",
+                                      "protesterdemand4", "stateresponse1", "stateresponse2", 
+                                      "stateresponse3","stateresponse4", "stateresponse5", 
+                                      "stateresponse6", "stateresponse7","sources", "notes")]
+
+#Repeat for KOF-Globalisation-Index data    
+dfGLO <- dfGLO[dfGLO$year >= 1991, ]
+dfGLO <- dfGLO[, !names(dfGLO) %in% c("code", "KOFGIdj", "KOFEcGIdj", "KOFTrGIdj", "KOFFiGIdj", "KOFSoGIdj", "KOFIpGIdj", "KOFInGIdj", "KOFCuGIdj", "KOFPoGIdj")]
+names(dfGLO)
+dfGLO$country[dfGLO$country == "United States"] <- "United States of America"
+dfGLO$country[dfGLO$country == "Myanmar"] <- "Burma/Myanmar"
+dfGLO$country[dfGLO$country == "Turkey"]<- "Türkiye"
+
+unique_countries <- unique(dfEP$country_name)
+cntry_PR <- unique(dfGLO$country)
+unique_countries <- setdiff(unique_countries, cntry_PR)
+print(unique_countries)
+
+for (country in unique_countries) {
+  match_rows <- grep(paste0("^", substr(country, 1, 3)), dfGLO$country)
+  
+  if (length(match_rows) > 0) {
+    dfGLO$country[match_rows] <- country
+  }
+}
+
+#Merge KOF-GLobalisation-Index with dfEPR(Episodes of Regime Transition and Mass Moblisation Project)
+dfEPRGL <- merge(dfEPR, dfGLO, 
+                 by.x = c("country", "year"), by.y = c("country", "year"), all.x = TRUE)
+dfEPRGL <- subset(dfEPRGL, !is.na(KOFGI))                                       #eject Missings
+#Create sub-data frames for later use in visualisation
+dfEPRGL_dem <- dfEPRGL[dfEPRGL$v2x_regime >= 2, ]                               #Containing only democratic regimes
+dfEPRGL_1 <- dfEPRGL[dfEPRGL$v2x_regime == 1, ]                                 #Containing only electoral autocracies
+dfEPRGL <- dfEPRGL[dfEPRGL$v2x_regime == 0, ]                                   #Containing only closed autocracies
+
+
+    #Code for visualisation and figures.
+    #In the thesis-document: Fig. 2, 3, 3A, 3B, 4, 5
+    #
+
+
+    #Fig. 2: Trend in Tertiary education
+    #
+
+#remove missings and democratic regimes
+dfEDEP <- subset(dfEDEP, !is.na(v2x_regime))
+dfEDEP_fil <- dfEDEP[dfEDEP$v2x_regime >= 1, ]
+
+#Yearly Means for closed autocracies
+sum_EDEP_v2x0 <- dfEDEP_fil %>%
+  filter(v2x_regime == 0) %>%
+  group_by(Year) %>%
+  summarise(avg_year = sum(Tertiary_completed) / n_distinct(Country))
+
+#Yearly Means for electoral autocracies
+sum_EDEP_v2x1 <- dfEDEP_fil %>%
+  filter(v2x_regime == 1) %>%
+  group_by(Year) %>%
+  summarise(avg_year = sum(Tertiary_completed) / n_distinct(Country))
+
+#Plotting Fig.2: Trendline Graph for educational attainment in closed and electoral autocracies
+ggplot() +
+  geom_point(data = sum_EDEP_v2x1, aes(x = Year, y = avg_year, color = "Electoral Autocracies"), size = 1.5) +  
+  geom_line(data = sum_EDEP_v2x1, aes(x = Year, y = avg_year, color = "Electoral Autocracies"), linewidth = 0.5) + 
+  geom_point(data = sum_EDEP_v2x0, aes(x = Year, y = avg_year, color = "Closed Autocracies"), size = 1.5) +
+  geom_line(data = sum_EDEP_v2x0, aes(x = Year, y = avg_year, color = "Closed Autocracies"), linewidth = 0.5) +  
+  labs(x = "Year", y = "% of Population with Tertiary Education", 
+       title = "Percentage of Population with Tertiary Education by Regime Type") +
+  theme_minimal() +
+  scale_color_manual(values = c("Electoral Autocracies" = "black", "Closed Autocracies" = "#bc0031")) +
+  guides(color = guide_legend(title = "Regime Type")) +
+  scale_x_continuous(breaks = seq(min(sum_EDEP_v2x0$Year), max(sum_EDEP_v2x0$Year), by = 10))
+
+#Reporting in text: mean at end of observation period
+sum_EDEP_v2x0_2015 <- filter(sum_EDEP_v2x0, Year == 2015)
+sum_EDEP_v2x1_2015 <- filter(sum_EDEP_v2x1, Year == 2015)
+
+print(paste(mean(sum_EDEP_v2x0_2015$avg_year)))
+print(paste(mean(sum_EDEP_v2x1_2015$avg_year)))
+
+
+    #Fig. 3: Relative frequency of yearly protest and coup events
+    #
+
+#Include only autocratic regimes
+filtered_df <- dfEPR[dfEPR$v2x_regime <= 1, ]
+
+#Yearly cumulative frequency of protest events by country
+agg_df <- filtered_df %>%
+  filter(protest == 1) %>%
+  group_by(year) %>%
+  summarise(Protest_Count = n())
+
+#Yearly cumulative frequency of coup events by country
+agg2_df <- dfCO %>%
+  filter(year >= 1991, year <= 2019) %>%
+  group_by(year) %>%
+  summarise(total_obs = n())
+
+#To display both trend lines in one graph, they need to be standarised to fit the scaling
+#For this, a factor of the max of yearly coup events and yearly protest events is
+#built, which serves a multiplicand standardisation.
+norm_df <- agg_df %>%
+  mutate(Protest_Percentage = (Protest_Count / max(Protest_Count)) * 100)       #Conversion to relative frequncy
+
+norm2_df <- agg2_df %>%
+  mutate(total_obs = (total_obs / max(total_obs)) * 100)
+
+combined_df <- bind_cols(norm_df, norm2_df,agg2_df$total_obs)
+
+combined_df <- combined_df %>%
+  mutate(Protest_Scaled = Protest_Count * (25/516))                             #Multiplicand
+print(combined_df)
+
+#Plotting Fig.3: Plotted data of Protest and coup events in Autocracies, overlayed with trend lines
+ggplot() +
+  geom_point(data = combined_df, aes(x = year...1, y = Protest_Percentage, color = "Protests"), size = 1) +  
+  geom_smooth(data = combined_df, aes(x = year...1, y = Protest_Percentage, color = "Protests"), linewidth = 0.5, fill = "grey90") + 
+  geom_point(data = combined_df, aes(x = year...1, y = total_obs, color = "Coup d'états"), size = 1) +
+  geom_smooth(data = combined_df, aes(x = year...1, y = total_obs, color = "Coup d'états"), linewidth = 0.5, fill = "lightpink") +  
+  labs(x = "Year", y = "Normalized yearly events", 
+       title = "Changes in frequency of Protests and Coup d'états in Autocracies") +
+  theme_minimal() +
+  scale_color_manual(values = c("Protests" = "black", "Coup d'états" = "#bc0031")) +
+  guides(color = guide_legend(title = "Events"), size = 10) +
+  scale_x_continuous(breaks = seq(min(combined_df$year...1)-1, max(combined_df$year...1)+1, by = 5)) +
+  scale_y_continuous(sec.axis = sec_axis(~.))
+
+      #--Not used in final project
+      #Histogram juxtaposing the yearly cumulative frequency of protest and coup events in autocracies
+
+# Create histogram
+ggplot(agg_df, aes(x = year, y = Protest_Count)) +
+  geom_bar(stat = "identity", fill = "snow3") +
+  geom_smooth(color = "black", size = 0.5) +
+  labs(x = "Year", y = "Number of Protests", title = "Protest Count in Authoritarian Regimes per Year") +
+  theme_minimal() +
+  coord_cartesian(xlim=c(1991,2020))
+
+    #--Not used in final version of thesis
+    #Graph similar to Fig. 3A for Coup events
+
+# Aggregate amount of observations per year
+agg_df <- dfCO %>%
+  group_by(year) %>%
+  summarise(total_obs = n())
+
+realized_agg <- dfCO %>%
+  group_by(year) %>%
+  summarise(total_realized = sum(realized, na.rm = TRUE))
+
+ggplot() +
+  geom_bar(data = agg_df, aes(x = year, y = total_obs), stat = "identity", fill = "snow3", alpha = 0.7) +
+  geom_step(data = agg_df, aes(x=year, y=total_obs), color = "black", size = 0.3, alpha = 0.8, direction = "mid" ) +
+  geom_area(data = realized_agg, aes(x = year, y = total_realized), stat= "align", fill = "grey50", alpha = 0.5) +
+  geom_step(data = realized_agg, aes(x=year, y=total_realized), color = "black", size = 0.3, direction = "mid" ) +
+  labs(x = "Year", y = "n of coups d'etat", title = "Aggregate attempted and successful coups d'etat per year") +
+  theme_minimal() 
+
+      #Fig. 3A: Histogram of cumulative protest frequency in autocracies from 1991-2020
+      #
+
+#create second histogram concerned with number of protest events per country
+agg_df <- filtered_df %>%
+  filter(protest == 1) %>%
+  group_by(year) %>%
+  summarise(Protest_Per_Country = sum(protest == 1) / n_distinct(country))
+
+# Create histogram
+ggplot(agg_df, aes(x = year, y = Protest_Per_Country)) +
+  geom_bar(stat = "identity", fill = "snow3") +
+  geom_smooth(color = "Black", size = 0.5) +
+  labs(x = "Year", y = "Average n of Protests per Country", title = "Protest Rate in Authoritarian Regimes per Year") +
+  theme_minimal() 
+
+#Reporting in text: Mean value of protest destinations by country
+mean_value <- mean(year_1991$Protest_Per_Country)
+
+
+      #Fig. 3B: Avg. Number of protest locations in autocracies 1991-2019
+      #
+
+#eject location missings from mass  mobilisation data, n of protest locations
+filtered_df <- subset(filtered_df, !is.na(location))
+summary_df <- dfEPR %>%
+  filter(protest == 1) %>%
+  group_by(year) %>%
+  summarise(unique_locations = n_distinct(location, na.rm = FALSE),
+            unique_countries = n_distinct(country))
+
+# Calculate the ratio of unique locations to unique countries for each year to get average per year
+summary_df <- summary_df %>%
+  mutate(locations_per_country = unique_locations / unique_countries)
+
+#Plotting Fig. 3B: Histogram of avg. number of protest locations in autocracies 1991-2020
+ggplot(summary_df, aes(x = year, y = locations_per_country)) +
+  geom_bar(stat = "identity", fill = "#C4D8F3") +
+  geom_smooth(color = "black", size = 0.5) +
+  labs(x = "Year", y = "Locations per Country", 
+       title = "Average Locations per Country per Year") +
+  theme_minimal()
+
+
+      #Fig. 4: Whisker Plots of Correlation of Transnational linkage and avg.
+      #number of yearly protest events in Autocracies
+
+# Define the time periods
+periods <- list(c(1991, 2001), c(2002, 2011), c(2012, 2019))
+
+# Create a list to store the plots
+whisker_plots <- list()
+
+# Function to calculate median for each group
+calculate_median <- function(x) {
+  return(median(x, na.rm = TRUE))
+}
+
+# Iterate over each time period
+for (period in periods) {
+  # Filter the data for the current period and protest numbers
+  filtered_data <- dfEPRGL_fil %>%
+    filter(year >= period[1] & year <= period[2]) %>%
+    mutate(protest_group = cut(protestnumber, breaks = c(-1, 0, 1, Inf),
+                               labels = c("0", "1", ">1"),
+                               include.lowest = TRUE))
+  
+  # Plotting Fig. 4: Individual Whisker Plot per time period
+  whisker_plot <- ggplot(filtered_data, aes(x = factor(protest_group), y = KOFGI)) +
+    geom_boxplot(fill = "grey50", color = "black", coef = 0.75, alpha =0.7) +
+    labs(x = " ", y = " ", title = paste(period[1], "-", period[2])) +
+    theme_minimal() +
+    stat_summary(fun = calculate_median, geom = "text", aes(label = paste(round(..y.., 2))),
+                 position = position_dodge(width = 0.75), vjust = -0.5)
+  
+  #Store individual plot in list
+  whisker_plots[[paste(period[1], "-", period[2])]] <- whisker_plot
+}
+
+#Combine all whisker plots in one Figure
+cwhisker_plots <- whisker_plots[[1]] / whisker_plots[[2]] / whisker_plots[[3]] + plot_layout(3)
+cwhisker_plots <- cwhisker_plots + plot_layout(widths = c(2, 2, 2))
+
+# Print the whisker plots
+print(cwhisker_plots)
+
+
+      #Fig. 5: Trend lines displaying correlation between frequency of yearly protest events and Transnational linkage by regime type.
+      #
+
+#Calculate number of yearly protest for correlation
+dfEPRGL_fil <- dfEPRGL %>%
+  group_by(country, year) %>%
+  filter(protestnumber == max(protestnumber))
+
+dfEPRGL_1_fil <- dfEPRGL_1 %>%
+  group_by(country, year) %>%
+  filter(protestnumber == max(protestnumber))
+
+dfEPRGL_dem_fil <- dfEPRGL_dem %>%
+  group_by(country, year) %>%
+  filter(protestnumber == max(protestnumber))
+
+#Plotting Fig. 5: Point plotted data overlayed with smoothed regression lines
+ggplot() +
+  geom_point(data = dfEPRGL_dem_fil, aes(x = KOFGI, y = protestnumber, color = "Democracies"), size = 1, alpha = 0.02) +
+  geom_point(data = dfEPRGL_fil, aes(x = KOFGI, y = protestnumber, color = "Autocracies"), size = 1 , alpha=0.03) +  
+  geom_smooth(data = dfEPRGL_dem_fil, aes(x = KOFGI, y = protestnumber, color = "Democracies"), method = "loess", se = TRUE,  linewidth = 0.7, fill = "lightblue") +
+  geom_smooth(data = dfEPRGL_fil, aes(x = KOFGI, y = protestnumber, color = "Autocracies"), method = "loess", se = TRUE, linewidth = 0.6, fill = "pink") + 
+  labs(x = "KOF-Globalization-Index Score", y = "n of yearly cumulative protest events") +
+  theme_minimal() +
+  scale_color_manual(values = c("Autocracies" = "#bc0031", "Democracies" = "grey50"))+
+  guides(color = guide_legend(title = "Regime type"), size = 10) +
+  coord_cartesian(ylim= c(0,10))
+
+
+      #--Not used in final document
+      #Area graph detailing the proportion of protest sizes in autocracies over the observation period
+
+participants_category_levels <- c(">10000", "5000-10000", "2000-4999", "1000-1999", "100-999", "50-99")
+
+# Use factor to define participants_category with ordered levels
+agg_df <- filtered_df %>%
+  filter(protest == 1) %>%
+  group_by(year, participants_category) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  mutate(proportion = count / sum(count, na.rm = TRUE),
+         participants_category = factor(participants_category,
+                                        levels = participants_category_levels,
+                                        ordered = TRUE))
+
+# Create the area graph of size of protest
+ggplot(agg_df, aes(x = year, y = proportion, fill = as.factor(participants_category))) +
+  geom_area(position = "fill", alpha = 0.9) +
+  labs(x = "Year", y = "Proportion", 
+       title = "Proportion of different sized protest events") +
+  scale_fill_manual(values = c( "grey90" ,"grey75", "grey50", "grey25","grey18", "grey10"),
+                    name = "Size of Protest") +
+  theme_bw() +
+  theme(axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12),
+        plot.title = element_text(size = 14)) +
+  coord_cartesian(xlim= c(1992, 2015))
