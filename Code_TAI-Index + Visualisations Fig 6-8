@@ -1,0 +1,498 @@
+#This R-file contains the coding for visualisations in section IV.(2) and V.(1)
+#for the Master Thesis "Transnational informational autocrats: the silent 
+#transformation of authoritarian political control." 
+
+#The coding for sections IV.(1) can be found in the file "Visualisation Fig.2-5".
+#The code had to be split for better computing performance.
+
+
+#The AI-assistant "ChatGPT" was used to write this code.
+
+    #Data sources: Self coded data on data localisation laws, Global news broad casting
+    #stations (Braun 2024), World Bank development indicators (Barro & Lee 2013),
+    #the Episodes of Regime Transitions-data set (Maerz et al. 2023), the Cline Center
+    #Coups d'Ètat Project (Chin et al. 2021), the Mass Mobilization Project (Clark & Regan 2021),
+    #the KOF-Globalisation-Index (Gygli et al. 2019) and the development indicators of the World Bank.
+
+    #Variable explanations for this code can be found next to the code for the respective
+    #Figures.
+
+library("readxl")
+library("openxlsx")
+library("dplyr")
+library("ggplot2")
+library("RColorBrewer")
+library("tidyr")
+library("haven")
+
+    #Import data sets including data processing.
+
+#dataframe
+dfFSM <- read_excel("C:/Users/lucas/Documents/DS_TIA.xlsx", sheet = "Glob_News")                    #Self-coded data on Global news broadcasting stations
+dfPDA <- read_excel("C:/Users/lucas/Documents/DS_TIA.xlsx", sheet = "persdata_localization_laws")   #Self-coded data on data localisation laws
+dfTIA <- read_excel("C:/Users/lucas/Documents/DS_TIA.xlsx", sheet = "TIA_Complete")                 #Transnational Authoritarian Informationalism index
+
+  #First visualisation and data on the properties of the self-coded data, as
+  #can be found in Annex 2
+
+  #Cumulative frequency graph for dfFSM, showing properties of Glob_news dataset
+  #The puropse for this graph is to depict the total number of Global Broadcasting 
+  #channels officially operated by state-owned or state-managed companies
+
+#Bring dfFSM into time series format
+dfFSM <- dfFSM %>%
+  arrange(Launch)
+
+#Create a cumulative frequency variable
+dfFSM$cumulative_freq <- 1:nrow(dfFSM)
+
+#Create a cumulative frequency variable for each state
+dfFSM$cumulative_freq_autocracy <- cumsum(dfFSM$ERT_AD == 1)
+dfFSM$cumulative_freq_captured <- cumsum(dfFSM$SSM_SO == 1)
+
+# Plotting Fig. 1(Annex 2): Area graph of cumulative frequency of news broadcasting station by regime type
+plot(dfFSM$Launch, dfFSM$cumulative_freq, type = "l",
+    xlab = "Launch Date", ylab = "Total number of Broadcasts",
+    xlim = (c(2000, 2022)), main = "Cumulative frequency of Global News Broadcasts")
+lines(dfFSM$Launch, dfFSM$cumulative_freq_captured, type = "l", col = "red", lwd = 2)
+lines(dfFSM$Launch, dfFSM$cumulative_freq_autocracy, type = "l", col = "blue", lwd = 2)
+
+#Fill areas under plottet lines
+polygon(c(dfFSM$Launch, rev(dfFSM$Launch)), 
+        c(dfFSM$cumulative_freq, rep(0, length(dfFSM$cumulative_freq))), 
+        col = "lightblue")
+polygon(c(dfFSM$Launch, rev(dfFSM$Launch)),
+        c(dfFSM$cumulative_freq_autocracy, rep(0, length(dfFSM$cumulative_freq_autocracy))),
+        col = "pink", border = 1)
+polygon(c(dfFSM$Launch, rev(dfFSM$Launch)),
+        c(dfFSM$cumulative_freq_captured, rev(dfFSM$cumulative_freq_autocracy)),
+        col = "lightgrey", border = 1)
+
+#Legend
+legend("topleft", legend = c("Total Global Broadcasting Channels", "Total State-owned media channels", "Owned by Autocrats"), 
+       col = c("Lightblue", "Grey", "Pink"), lwd = 5)
+axis(side = 4, at = pretty(range(c(1:nrow(dfFSM)))))
+axis(side = 2, at = pretty(range(c(1:nrow(dfFSM)))))
+
+
+  #Cumulative frequency graph for dfPDA, showing properties of persdata_localization_dataset
+  #Purpose: Show trends in personalized data legislation localisation laws
+  #Repeat procedure.
+
+#Bring dfPDA into time series format
+dfPDA<- dfPDA %>%
+  arrange(year)
+
+#Create a cumulative frequency variable
+dfPDA$cumulative_freq <- cumsum(dfPDA$exp_pers_data_loc == 1 | dfPDA$ind_pers_data_loc == 1)
+
+#Create a cumulative frequency variable for each state
+dfPDA$cumulative_freq_GDPR <- cumsum(dfPDA$GDPR == 1)
+dfPDA$cumulative_freq_ETS_108 <- cumsum(dfPDA$ETS_108 == 1)
+dfPDA$cumulative_freq_exp <- cumsum(dfPDA$exp_pers_data_loc == 1)
+
+#Plotting Fig. 2(Annex 2): Area graph of cumulative frequency of personalised data localisation laws
+plot(dfPDA$year, dfPDA$cumulative_freq, type = "l",
+     xlab = "Year", ylab = "Total number of data localization laws",
+     xlim = (c(2000, 2022)), main = "Cumulative frequency of data localization laws")
+lines(dfPDA$year, dfPDA$cumulative_freq_exp, type = "l", col = "black", lwd = 1)
+
+#Fill area
+polygon(c(dfPDA$year, rev(dfPDA$year)), 
+        c(dfPDA$cumulative_freq, rep(0, length(dfPDA$cumulative_freq))), 
+        col = "Snow2")
+polygon(c(dfPDA$year, rev(dfPDA$year)),
+        c(dfPDA$cumulative_freq_exp, rep(0, length(dfPDA$cumulative_freq_exp))),
+        col = "Snow3", border = 1)
+#Legend
+legend("topleft", legend = c("Total data localization laws", "Total explicit data localization laws"), 
+       col = c("Snow2", "Snow3"), lwd = 5)
+axis(side = 2, at = c(0,20,40,60,80,100,120,140))
+axis(side = 4, at = c(0,20,40,60,80,100,120,140))
+
+  #Pie-chart for GDPR-Regime countries and nonGDPR
+# Filter dfPDA for GDPR = 0
+dfPDA_GDPR_0 <- subset(dfPDA, GDPR == 0)
+count_GDPR_0 <- table(dfPDA_GDPR_0$exp_pers_data_loc)
+pie_df_GDPR_0 <- data.frame(group = names(count_GDPR_0), value = as.vector(count_GDPR_0))
+
+      #The GDPR-policy of the European Union has an international dimension, which
+      #promotes the adoption of similar frameworks to non-EU countries. The GDPR are
+      #regime was coded and tested, whether it contributed to the adoption of
+      #explicit data localisation laws. (Annex 2)
+
+# Exclude rows where year is missing
+dfPDA <- dfPDA[dfPDA$year != "-", ]
+contingency_table <- table(dfPDA$exp_pers_data_loc, dfPDA$GDPR)
+fisher_test_result <- fisher.test(table(dfPDA$exp_pers_data_loc, dfPDA$GDPR))
+
+# Print test result
+print(fisher_test_result)
+print(contingency_table)
+
+
+      #After describing and testing the properties of the self-coded data, the following
+      #sections describe, visualise, and test linkages of the TAI-Index.
+      #
+
+      #Pre-Processing
+      #The coding was perfomed for both Democracies and autocracies, only include the latter
+
+#Only Autocracies
+dfTIA_filtered <- dfTIA[dfTIA$v2x_regime %in% c(0, 1), ]
+
+#Recode DSP practice variables to binaries
+#v2smgovab (Disseminating Fake News Abroad)
+dfTIA_filtered <- dfTIA_filtered %>%
+  mutate(v2smgovab_ord_group = if_else(v2smgovab_ord %in% c(0, 1), 1, 0))
+
+#v2smgovfilprc_ord (Content filtering practice)
+dfTIA_filtered <- dfTIA_filtered %>%
+  mutate(v2smgovfilprc_ord_group = if_else(v2smgovfilprc_ord %in% c(0, 1), 1, 0))
+
+
+      #Create area-graphs (Fig. 6) of individual transnational 
+      #informational practices included in the analysis
+
+#Area graph Global news broadcasting practice
+#Calculate proportions for IntSOBR
+proportions <- dfTIA_filtered %>%
+  group_by(year) %>%
+  summarise(proportion = mean(IntSOBR))
+
+#Plotting proportional Area-Graph: x-axis=year, y-axis = %n of regimes employing Global news broadcasting practice
+ggplot(proportions, aes(x = year, y = proportion)) +
+  geom_area(position = "stack", fill = "lightgrey", alpha = 0.5) +
+  geom_line(aes(group = 1), color = "black") +
+  labs(x = "Year", y = "% of IntSOBR = 1", 
+       title = "State-owned global news broadcasts") +
+  theme_minimal() +
+  theme(axis.title = element_text(size = 13), 
+        axis.text = element_text(size = 14),   
+        legend.title = element_text(size = 12), 
+        legend.text = element_text(size = 20)) +
+  coord_cartesian(ylim = c(0, 1)) +
+  scale_y_continuous(labels = scales::percent)
+
+#Area graph Across-border fake news dissemination practice
+#Calculate proportions for v2smbovab_ord
+proportions <- dfTIA_filtered %>%
+  group_by(year) %>%
+  summarise(proportion = mean(v2smgovab_ord_group))
+
+#Plotting proportional Area-Graph: x-axis=year, y-axis = %n of regimes employing Across-border Fake news dissemination practice
+ggplot(proportions, aes(x = year, y = proportion)) +
+  geom_area(position = "stack", fill = "lightgrey", alpha = 0.5) +
+  geom_line(aes(group = 1), color = "black") +
+  labs(x = "Year", y = "% of govab_ord = 0, 1, 2", 
+       title = "Spreading disinformation abroad") +
+  theme_minimal() +
+  theme(axis.title = element_text(size = 13),  
+        axis.text = element_text(size = 14),   
+        legend.title = element_text(size = 12),  
+        legend.text = element_text(size = 20)) +  
+  coord_cartesian(ylim = c(0, 1)) +
+  scale_y_continuous(labels = scales::percent)
+
+#Area graph Data localisation practice 
+#Calculate proportions for pers_data_loc_law
+proportions <- dfTIA_filtered %>%
+  group_by(year) %>%
+  summarise(proportion = mean(pers_data_loc_law))
+
+#Plotting proportional Area-Graph: x-axis=year, y-axis = %n of regimes employing Data localisation practice
+ggplot(proportions, aes(x = year, y = proportion)) +
+  geom_area(position = "stack", fill = "lightgrey", alpha = 0.5) +
+  geom_line(aes(group = 1), color = "black") +
+  labs(x = "Year", y = "% of pers_data_loc_law = 1", 
+       title = "Data localization laws") +
+  theme_minimal() +
+  theme(axis.title = element_text(size = 13),  # Adjust axis title font size
+        axis.text = element_text(size = 14),   # Adjust axis labels font size
+        legend.title = element_text(size = 12),  # Adjust legend title font size
+        legend.text = element_text(size = 20)) +  # Adjust legend labels font size
+  coord_cartesian(ylim = c(0, 1)) +
+  scale_y_continuous(labels = scales::percent)
+
+#Area graph Government content filtering practice
+#Calculate proportions for v2smgovfilprc_ord
+proportions <- dfTIA_filtered %>%
+  group_by(year) %>%
+  summarise(proportion = mean(v2smgovfilprc_ord_group))
+
+#Plotting proportional Area-Graph: x-axis=year, y-axis = %n of regimes employing Government content filtering practice
+ggplot(proportions, aes(x = year, y = proportion)) +
+  geom_area(position = "stack", fill = "lightgrey", alpha = 0.5) +
+  geom_line(aes(group = 1), color = "black") +
+  labs(x = "Year", y = "% of govfilprc_ord = 0, 1", 
+       title = "Government filtering capacity") +
+  theme_minimal() +
+  theme(axis.title = element_text(size = 13),  # Adjust axis title font size
+        axis.text = element_text(size = 14),   # Adjust axis labels font size
+        legend.title = element_text(size = 20),  # Adjust legend title font size
+        legend.text = element_text(size = 20)) +  # Adjust legend labels font size
+  coord_cartesian(ylim = c(0, 1)) +
+  scale_y_continuous(labels = scales::percent)
+
+
+      #Create a combined area graph displaying the absolute proportions of regimes 
+      #utilizing any of the practices by year. 
+      #
+
+    #Therefore, we first have to create the TAI-Index - a simple additive index
+    #combining all the transnational informational practices coded.
+
+#Create additive Index
+dfTIA <- dfTIA %>%
+  mutate(TIA_addindex = as.numeric(IntSOBR == 1) +
+           as.numeric(v2smgovab_ord %in% c(0, 1)) +
+           as.numeric(pers_data_loc_law == 1) +
+           as.numeric(v2smgovfilprc_ord %in% c(0, 1))) %>%
+  mutate(TIND_addindex = as.numeric(IntSOBR == 1) +
+           as.numeric(v2smgovab_ord %in% c(0, 1))) %>%
+  mutate(TINF_addindex = as.numeric(pers_data_loc_law == 1) +
+           as.numeric(v2smgovfilprc_ord %in% c(0, 1)))
+
+# Calculate proportions of additive_index by year
+proportions <- dfTIA %>%
+  group_by(year, TIA_addindex) %>%
+  summarise(count = n()) %>%
+  mutate(proportion = count / sum(count))
+
+      #--Not-used in final document
+      #Area graph displaying use of transnational informational practices for all
+      #regime types
+
+ggplot(proportions, aes(x = year, y = proportion, fill = as.factor(TIA_addindex))) +
+  geom_area(position = "stack", alpha = 0.75) +
+  labs(x = "Year", y = "Proportion", 
+       title = "TIA-Index by Year") +
+  theme(axis.text.x = element_text(size = 20),
+        axis.text.y = element_text(size = 20),  
+        plot.title = element_text(size = 20)) +
+  scale_fill_manual(values = c("grey90" ,"grey70", "grey50", "grey25", "black"),
+                    labels = c("0", "1", "2", "3", "4"),
+                    guide = guide_legend(title = "n of practices used by regime")) +
+  theme_bw() +
+  coord_cartesian(xlim = c(2001, 2022), ylim = c(0.04, 0.96))
+
+
+        #Fig. 7: Absolute area graph plotting TAI-Index only for autocracies
+        #by year. 
+        #
+
+#Filter rows where v2x_regime is either 0 or 1
+dfTIA_filtered <- dfTIA[dfTIA$v2x_regime %in% c(0, 1), ]
+
+# Calculate proportions of additive_index by year
+proportions <- dfTIA_filtered %>%
+  group_by(year, TIA_addindex) %>%
+  summarise(count = n()) %>%
+  mutate(proportion = count / sum(count))
+
+#Plotting Fig. 7: x-axis=year, y-axis=Additive TAI-index
+ggplot(proportions, aes(x = year, y = proportion, fill = as.factor(TIA_addindex))) +
+  geom_area(position = "stack", alpha = 0.75) +
+  labs(x = "Year", y = "Proportion", 
+       title = "TIA-Index by Year") +
+  scale_fill_manual(values = c("grey90" ,"grey70", "grey50", "grey25", "black"),
+                    labels = c("0", "1", "2", "3", "4"),
+                    name = "n of practices used by autocracy") +
+  theme_bw() +
+  theme(axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12),
+        plot.title = element_text(size = 14)) +
+  coord_cartesian(xlim = c(2001, 2022), ylim = c(0.04, 0.96))
+
+      #--Not used in final document
+      #Area graph only inlcuding democracies
+
+# Filter rows where v2x_regime is either 0 or 1
+dfTIA_filtered_dem <- dfTIA[dfTIA$v2x_regime %in% c(2, 3), ]
+
+# Create TIA_addindex_dem column
+dfTIA_filtered_dem$TIA_addindex_dem <- as.numeric(dfTIA_filtered_dem$IntSOBR == 1) +
+  as.numeric(dfTIA_filtered_dem$v2smgovab_ord %in% c(0, 1)) +
+  as.numeric(dfTIA_filtered_dem$pers_data_loc_law == 1) +
+  as.numeric(dfTIA_filtered_dem$v2smgovfilprc_ord %in% c(0, 1))
+
+# Calculate proportions of additive_index by year
+proportions <- dfTIA_filtered_dem %>%
+  group_by(year, TIA_addindex_dem) %>%
+  summarise(count = n()) %>%
+  mutate(proportion = count / sum(count))
+
+#Plotting: x-axis= year, y-axis= Additive TAI-Index
+ggplot(proportions, aes(x = year, y = proportion, fill = as.factor(TIA_addindex_dem))) +
+  geom_area(position = "stack", alpha = 0.75) +
+  labs(x = "Year", y = "Proportion", 
+       title = "TIA-Index by Year") +
+  scale_fill_manual(values = c("grey90" ,"grey70", "grey50", "grey25", "black"),
+                    labels = c("0", "1", "2", "3", "4"),
+                    name = "n of practices used by autocracy") +
+  theme_bw() +
+  theme(axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12),
+        plot.title = element_text(size = 14)) +
+  coord_cartesian(xlim = c(2001, 2022), ylim = c(0.04, 0.96))
+
+
+    #--Not included in final, but presented in earlier presentation to MA-Project-group.
+    #Recreate Scatterplot by Guriev and Treisman (2020, p. 22)
+    #"Figure 4: Size of the informed elite, state media ownership and regime type."
+
+    #Begin by adding data from World Bank development indicators to induce soft
+    #exploration of causal linkage.
+
+    #Pre-processing
+
+#Data on remittance payments, Trade as percentage of GDP, Levels of Globalisation, Protest rates and Levels of tertiary educational attainment
+dfREM_IN <- read_excel("C:/Users/lucas/Documents/Mastthesis/Datasets/inward_remittance_flows_december_2023_1.xlsx", sheet = "Inward remittance flows")
+dfREM_OUT <- read_excel("C:/Users/lucas/Documents/Mastthesis/Datasets/inward_remittance_flows_december_2023_1.xlsx", sheet = "Outward remittance flows")
+dfTRD <- read_excel("C:/Users/lucas/Documents/Mastthesis/Datasets/inward_remittance_flows_december_2023_1.xlsx", sheet = "WDI_TradepctGDP")
+dfEDU <- read_excel("C:/Users/lucas/Documents/Mastthesis/Datasets/API_SE.TER.ENRR_DS2_en_excel_v2_239791.xls", sheet = "Data")
+dfGLO <- read_dta("C:/Users/lucas/Documents/Mastthesis/Datasets/KOFGI_2023_public.dta")             #KOF-Globalisation-Index
+dfPRO <- file26013811bbf                                                                            #The Mass Mobilization Project data set
+
+
+#Extract only 2023 values from dfTIA
+dfTIA_fil_year <- dfTIA[dfTIA$year %in% c(2023), ]
+head(dfTIA_fil_year)
+
+#Merge datasets
+dfTIA_fil_year$rempctGDP_in <- NA
+dfTIA_fil_year$rempctGDP_out <- NA
+dfTIA_fil_year$TradepctGDP <- NA
+dfTIA_fil_year$EmigPop <- NA
+dfTIA_fil_year$TertEdu <- NA
+
+for (country in unique(dfTIA_fil_year$country_name)) {
+  print(country)
+  match_row <- which(dfREM_IN$Remittance_inflows == country)
+  print(match_row)
+  if (length(match_row) > 0) {
+    # Transmit value of dfREM$GDPpct to dfTIA_fil_year$rempctGDP_in
+    dfTIA_fil_year$rempctGDP_in[dfTIA_fil_year$country_name == country] <- dfREM_IN$GDPpct[match_row]
+    dfTIA_fil_year$rempctGDP_out[dfTIA_fil_year$country_name == country] <- dfREM_OUT$GDPpct[match_row]
+    dfTIA_fil_year$TradepctGDP[dfTIA_fil_year$country_name == country] <- dfTRD$YR2022[match_row]
+    dfTIA_fil_year$EmigPop[dfTIA_fil_year$country_name == country] <- dfMIG$YR2020[match_row]
+    dfTIA_fil_year$TertEdu[dfTIA_fil_year$country_name == country] <- dfEDU$Most_recent[match_row]
+  }
+}
+
+#Merge data from KOF-Gloablisation-Index with data
+dfGLO <- dfGLO[dfGLO$year >= 2021, ]
+dfGLO <- dfGLO[, !names(dfGLO) %in% c("code", "year", "KOFGIdj", "KOFEcGIdj", "KOFTrGIdj", "KOFFiGIdj", "KOFSoGIdj", "KOFIpGIdj", "KOFInGIdj", "KOFCuGIdj", "KOFPoGIdj")]
+names(dfGLO)
+dfGLO$country[dfGLO$country == "United States"] <- "United States of America"
+dfGLO$country[dfGLO$country == "Myanmar"] <- "Burma/Myanmar"
+dfGLO$country[dfGLO$country == "Turkey"]<- "Türkiye"
+
+unique_countries_dfTIA <- unique(dfTIA$country_name)
+all_countries_dfGLO <- dfGLO$country
+unique_countries <- setdiff(unique_countries_dfTIA, all_countries_dfGLO)
+
+for (country in unique_countries) {
+  match_rows <- grep(paste0("^", substr(country, 1, 3)), dfGLO$country)
+  
+  # Check if there's a match
+  if (length(match_rows) > 0) {
+    # Replace the matched countries in dfGLO$country
+    dfGLO$country[match_rows] <- country
+  }
+}
+
+#Merge Mass Mobilisation Project-data
+dfPRO <- dfPRO %>%
+  select(country, year, prn_avg) %>% 
+  filter(year == 2019)
+
+#Merge datasets
+dfTIA_fil_year <- merge(dfTIA_fil_year, dfGLO, by.x = "country_name", by.y = "country", all.x = TRUE)
+dfTIA_fil_year <- merge(dfTIA_fil_year, dfPRO, by.x = "country_name", by.y = "country", all.x = TRUE)
+names(dfTIA_fil_year)
+
+
+#clear missings from resulting merged dataframe
+dfTIA_fil_year <- subset(dfTIA_fil_year, !is.na(rempctGDP_in) & rempctGDP_in != 0)
+dfTIA_fil_year <- subset(dfTIA_fil_year, !is.na(rempctGDP_out) | rempctGDP_out != 0)
+dfTIA_fil_year <- subset(dfTIA_fil_year, !is.na(prn_avg))
+
+#Conversion
+dfTIA_fil_year$EmigPop <- as.numeric(as.character(dfTIA_fil_year$EmigPop))
+dfTIA_fil_year$TradepctGDP <- as.numeric(as.character(dfTIA_fil_year$TradepctGDP))
+dfTIA_fil_year$TertEdu <- as.numeric(as.character(dfTIA_fil_year$TertEdu))
+dfTIA_fil_year$ln_TradepctGDP <- log(dfTIA_fil_year$TradepctGDP)
+dfTIA_fil_year$ln_EmigPop <- log(dfTIA_fil_year$EmigPop)
+
+#Composites
+dfTIA_fil_year$EDUGLB <- dfTIA_fil_year$TertEdu * dfTIA_fil_year$KOFGI
+dfTIA_fil_year$EDUGLI <- dfTIA_fil_year$TertEdu * dfTIA_fil_year$KOFInGI
+dfTIA_fil_year$EDUGLE <- dfTIA_fil_year$TertEdu * dfTIA_fil_year$KOFInGI * dfTIA_fil_year$ln_EmigPop
+
+  #Export dataframe for regression analysis in posit
+  #write.xlsx(dfTIA_fil_year, "dfTIA_fil_year.xlsx")
+
+
+      #For fast exploration of causal linkage a list of variables was create
+      #to iterate through different variables, screening for interesting
+      #correlations.
+
+# Create a list of variables
+variables <- c("KOFGI", "KOFFiGIdf", "KOFSoGI", "KOFSoGIdf", 
+               "KOFInGI", "KOFInGIdf", "KOFPoGI", "KOFPoGIdf", "rempctGDP_in",
+                "rempctGDP_out", "TradepctGDP", "ln_EmigPop", "TertEdu", "prn_avg")
+
+dfTIA_fil_year <- dfTIA_fil_year[dfTIA_fil_year$v2x_regime %in% c(0, 1), ]
+
+#Export dataset (now only containing auth regimes) for reg analysis in posit
+#write.xlsx(dfTIA_fil_year, "dfTIA_fil_year_aut.xlsx")
+
+#The following function to generates the plot for each entry in the list "variables"
+#The iteration method allows for fast comparison of different correlation trends 
+#between the variables
+for (i in variables) {
+  print(
+    ggplot(dfTIA_fil_year, aes_string(x = i, y = "TIA_addindex", fill = "v2x_polyarchy")) +
+      geom_point(size = 3, shape = 21) +
+      geom_smooth(se= FALSE, method = "loess", linewidth = 0.7)+
+      geom_text(aes(label = substr(country_name, 1, 3)), size = 4, vjust = -0.8, check_overlap = TRUE) +
+      scale_fill_gradient(low = "red", high = "orange") +
+      stat_summary(fun = "median", geom = "vline", aes(xintercept = median(dfTIA_fil_year[[i]])),
+                   color = "blue", linetype = "dashed") +
+      theme(text = element_text(size = 18, family = "Times")) +
+      scale_color_manual(values = "blue") +
+      labs(x = i, y = "TIA_addindex", fill = "v2x_polyarchy") # Add labels for axes
+  )
+}
+
+      #Fig. 8: Matrix of interactions between proxy variables for DV and IV, 
+      #split by indoctrinating and infiltrating practices. Here, indivual interactions
+      #are computed. The matrix was later assembled in canva.
+
+    #Same iteration method was used.
+    #First function concerns indoctrinating practices, second infiltrating ones.
+
+# Create a function to generate the plot for each variable
+for (i in variables) {
+  print(
+    ggplot(dfTIA_fil_year, aes_string(x = i, y = "TIND_addindex", fill = "v2x_polyarchy")) +
+      geom_point(size = 3, shape = 8) +
+      geom_smooth(se= FALSE, method = "loess", linewidth = 1.5)+
+      geom_text(aes(label = substr(country_name, 1, 3)), size = 4, vjust = -0.8, check_overlap = TRUE) +
+      theme_minimal() +
+      theme(text = element_text(size = 18, family = "Times")) 
+  )
+}
+
+# Create a function to generate the plot for each variable
+for (i in variables) {
+  print(
+    ggplot(dfTIA_fil_year, aes_string(x = i, y = "TINF_addindex", fill = "v2x_polyarchy")) +
+      geom_point(size = 3, shape = 8) +
+      geom_smooth(se= FALSE, method = "loess", linewidth = 1.5)+
+      geom_text(aes(label = substr(country_name, 1, 3)), size = 4, label.padding = 0.1, vjust = -0.8, check_overlap = TRUE) +
+      theme_minimal() +
+      theme(text = element_text(size = 18, family = "Times")) 
+  )
+}
