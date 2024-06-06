@@ -1,6 +1,6 @@
-#This R-file contains the coding for visualisations in section IV.(2) and V.(1)
-#for the Master Thesis "Transnational informational autocrats: the silent 
-#transformation of authoritarian political control." 
+#This R-file contains the coding for the Transnational Authoritarian Informationalism Index
+# as well as the visualisations in section IV.(2) and V.(1) for the Master Thesis 
+#"Transnational informational autocrats: the silent transformation of authoritarian political control." 
 
 #The coding for sections IV.(1) can be found in the file "Visualisation Fig.2-5".
 #The code had to be split for better computing performance.
